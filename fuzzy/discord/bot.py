@@ -25,21 +25,27 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord.ext import commands
 
 from fuzzy import Config
+from fuzzy.constants import VERSION
+from fuzzy.discord import addons
 
 
 class Bot(commands.Bot):
-    __slots__ = ("extensions", "scheduler", "session")
+    __slots__ = ("extensions", "scheduler", "session", "ready", "presence", "error")
 
     def __init__(self) -> None:
         self.extensions = [p.stem for p in Path(".").glob("./fuzzy/discord/extensions/*.py")]
 
         self.scheduler = AsyncIOScheduler()
         self.session = ClientSession()
+        self.ready = addons.ReadyStatusTracker(self)
+        self.presence = addons.PresenceUpdater(self)
+        self.error = addons.ErrorHandler()
 
         super().__init__(
             command_prefix=commands.when_mentioned_or(Config.DEFAULT_PREFIX),
             case_insensitive=True,
             status=discord.Status.dnd,
+            intents=discord.Intents.all(),
         )
 
     def __call__(self) -> None:
@@ -69,6 +75,9 @@ class Bot(commands.Bot):
         print(" Scheduler shut down.")
         await self.session.close()
         print(" HTTP session closed.")
+
+        await self.stdout.send(f"Fuzzy is shutting down. (Version {VERSION})")
+        await self.get_cog("Hub").stdout.send(f"Fuzzy is shutting down. (Version {VERSION})")
         await super().close()
         print(" Bot shut down.")
 
@@ -79,8 +88,21 @@ class Bot(commands.Bot):
         print(f" Bot disconnected.")
 
     async def on_ready(self) -> None:
+        if self.ready.booted:
+            print(f" Bot reconnected. DWSP latency: {self.latency * 1000:,.0f} ms.")
+            return
+
+        self.guild = self.get_guild(Config.MAIN_GUILD_ID)
+        self.stdout = self.guild.get_channel(Config.MAIN_STDOUT_CHANNEL_ID)
+
         self.scheduler.start()
         print(f" Scheduler started ({len(self.scheduler.get_jobs())} jobs scheduled).")
+        await self.presence.cycle()
+        print(" Updated presence.")
+
+        if self.stdout:
+            await self.stdout.send(f"Fuzzy is now online! (Version {VERSION})")
+        self.ready.booted = True
         print(" Bot ready.")
 
     async def on_message(self, message: discord.Message) -> None:
@@ -90,15 +112,18 @@ class Bot(commands.Bot):
         await self.process_commands(message)
 
     async def on_error(self, err: str, ctx: commands.Context, exc: Exception, **kwargs) -> None:
-        raise getattr(exc, "original", exc)
+        await self.error.handle_error(err, ctx, exc)
 
     async def on_command_error(self, ctx: commands.Context, exc: commands.CommandError) -> None:
-        raise getattr(exc, "original", exc)
+        await self.error.handle_command_error(ctx, exc)
 
     async def process_commands(self, message: discord.Message) -> None:
         ctx = await self.get_context(message, cls=commands.Context)
 
         if ctx.command is None:
             return
+
+        if not self.ready.booted:
+            return await ctx.send("I'm not ready to receive commands. Try again in a few seconds.", delete_after=5)
 
         await self.invoke(ctx)
