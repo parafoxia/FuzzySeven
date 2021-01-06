@@ -18,4 +18,5 @@
 # ethan.henderson.1998@gmail.com
 
 from fuzzy.config import Config
+from fuzzy.constants import *
 from fuzzy.discord import Bot

@@ -23,8 +23,7 @@ import discord
 from apscheduler.triggers.cron import CronTrigger
 from discord.ext import commands
 
-from fuzzy import Config
-from fuzzy.constants import VERSION
+from fuzzy import VERSION, Config
 
 
 class PresenceUpdater:

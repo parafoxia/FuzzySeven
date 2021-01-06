@@ -24,8 +24,7 @@ from aiohttp import ClientSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord.ext import commands
 
-from fuzzy import Config
-from fuzzy.constants import VERSION
+from fuzzy import VERSION, Config
 from fuzzy.discord import addons
 
 
