@@ -22,7 +22,6 @@ from discord.ext import commands
 
 class ReadyStatusTracker:
     def __init__(self, bot: commands.Bot) -> None:
-        super().__init__()
         self.bot = bot
         self.booted = False
 
